@@ -1,438 +1,493 @@
-import { Component } from "@angular/core";
-import { CommonModule } from "@angular/common";
-import { MatButtonModule } from "@angular/material/button";
-import { MatIconModule } from "@angular/material/icon";
+import { CommonModule, DatePipe, DecimalPipe } from "@angular/common";
+import { Component, Input } from "@angular/core";
+import { MatCardModule } from "@angular/material/card";
 import { MatDividerModule } from "@angular/material/divider";
+import { MatIconModule } from "@angular/material/icon";
+
+import { Invoice } from "../../models/invoice.model";
+import { MockDataService } from "../../services/mock-data.service";
 
 @Component({
   selector: "app-invoice-preview",
   standalone: true,
-  imports: [CommonModule, MatButtonModule, MatIconModule, MatDividerModule],
+  imports: [
+    CommonModule,
+    MatCardModule,
+    MatDividerModule,
+    MatIconModule,
+    DatePipe,
+    DecimalPipe,
+  ],
   template: `
-    <div class="invoice-preview">
-      <div class="action-bar">
-        <button mat-button (click)="printInvoice()">
-          <mat-icon>print</mat-icon> Print
-        </button>
-        <button mat-button (click)="downloadPDF()">
-          <mat-icon>download</mat-icon> Download PDF
-        </button>
-        <button mat-button (click)="closePreview()">
-          <mat-icon>close</mat-icon> Close
-        </button>
+    <mat-card class="preview-shell">
+      <div class="preview-header">
+        <div>
+          <p class="eyebrow">Live Invoice Preview</p>
+          <h2>GST Tax Invoice</h2>
+        </div>
+        <div class="badge">
+          <mat-icon>visibility</mat-icon>
+          <span>Auto-updating</span>
+        </div>
       </div>
 
-      <div class="invoice-document">
-        <!-- Invoice Header -->
-        <div class="invoice-header">
-          <div class="logo-section">
-            <div class="logo-placeholder">LOGO</div>
-          </div>
-          <div class="company-info">
-            <h1>{{ companyName }}</h1>
-            <p>{{ gstin }}</p>
-            <p>{{ address }}</p>
-            <p>Phone: {{ phone }}</p>
-          </div>
-        </div>
+      <article class="invoice-sheet" *ngIf="invoice; else emptyState">
+        <header class="top-grid">
+          <section class="company-block">
+            <div class="logo-block">
+              <div class="logo-placeholder">LOGO</div>
+            </div>
+            <div class="company-copy">
+              <h3>{{ company.name }}</h3>
+              <p>{{ company.address }}</p>
+              <p>Phone: {{ company.phone }}</p>
+              <p>GSTIN: {{ company.gstin }}</p>
+            </div>
+          </section>
 
-        <mat-divider></mat-divider>
+          <aside class="meta-block">
+            <div class="meta-row">
+              <span>Invoice No.</span
+              ><strong>{{ invoice.invoiceNumber }}</strong>
+            </div>
+            <div class="meta-row">
+              <span>Date</span
+              ><strong>{{ invoice.invoiceDate | date: "dd/MM/yyyy" }}</strong>
+            </div>
+            <div class="meta-row">
+              <span>Delivery Note</span
+              ><strong>{{ invoice.deliveryNote || "-" }}</strong>
+            </div>
+            <div class="meta-row">
+              <span>Vehicle No.</span
+              ><strong>{{ invoice.vehicleNumber || "-" }}</strong>
+            </div>
+            <div class="meta-row">
+              <span>Terms</span
+              ><strong>{{ invoice.termsOfPayment || "-" }}</strong>
+            </div>
+          </aside>
+        </header>
 
-        <!-- Invoice Title -->
         <div class="invoice-title">
-          <h2>TAX INVOICE</h2>
+          <span>TAX INVOICE</span>
         </div>
 
-        <!-- Invoice Details -->
-        <div class="invoice-details-grid">
-          <div class="invoice-info">
-            <p><strong>Invoice No.:</strong> {{ invoiceNumber }}</p>
-            <p>
-              <strong>Date.:</strong> {{ invoiceDate | date: "dd/MM/yyyy" }}
-            </p>
-            <p><strong>Vehicle No.:</strong> {{ vehicleNumber }}</p>
-            <p><strong>Delivery Note.:</strong> {{ deliveryNote }}</p>
-          </div>
-          <div class="terms-info">
-            <p><strong>Terms of Payment:</strong> {{ termsOfPayment }}</p>
-          </div>
-        </div>
-
-        <mat-divider></mat-divider>
-
-        <!-- Party Details -->
-        <div class="party-details">
-          <div class="party-section">
-            <h4>Bill To:</h4>
-            <p>
-              <strong>{{ buyerName }}</strong>
-            </p>
-            <p>GSTIN: {{ buyerGstin }}</p>
-            <p>{{ buyerAddress }}</p>
-            <p>State: {{ buyerState }}</p>
+        <section class="party-grid">
+          <div class="party-card">
+            <p class="section-label">Buyer</p>
+            <h4>{{ invoice.buyerName || "Buyer Name" }}</h4>
+            <p>GSTIN: {{ invoice.buyerGstin || "-" }}</p>
+            <p>{{ invoice.buyerAddress || "-" }}</p>
+            <p>State: {{ invoice.buyerState || "-" }}</p>
           </div>
 
-          <div class="party-section">
-            <h4>Ship To:</h4>
-            <p>
-              <strong>{{ consigneeName }}</strong>
-            </p>
-            <p>{{ consigneeAddress }}</p>
-            <p>State: {{ consigneeState }}</p>
+          <div class="party-card">
+            <p class="section-label">Consignee</p>
+            <h4>{{ invoice.consigneeName || "Consignee Name" }}</h4>
+            <p>GSTIN: {{ invoice.consigneeGstin || "-" }}</p>
+            <p>{{ invoice.consigneeAddress || "-" }}</p>
+            <p>State: {{ invoice.consigneeState || "-" }}</p>
           </div>
-        </div>
+        </section>
 
-        <mat-divider></mat-divider>
-
-        <!-- Items Table -->
-        <div class="items-section">
-          <table class="invoice-table">
+        <section class="table-section">
+          <table class="line-item-table">
             <thead>
               <tr>
                 <th>Sl No</th>
                 <th>Product Name</th>
                 <th>HSN/SAC</th>
                 <th>Qty</th>
+                <th>Unit</th>
                 <th>Rate</th>
                 <th>GST %</th>
                 <th>Amount</th>
               </tr>
             </thead>
             <tbody>
-              <tr *ngFor="let item of items; let i = index">
-                <td class="text-center">{{ i + 1 }}</td>
+              <tr
+                *ngFor="
+                  let item of invoice.items;
+                  let i = index;
+                  trackBy: trackByItemId
+                ">
+                <td>{{ i + 1 }}</td>
                 <td>{{ item.productName }}</td>
                 <td>{{ item.hsnSac }}</td>
-                <td class="text-right">{{ item.quantity }}</td>
-                <td class="text-right">₹{{ item.rate | number: "1.0-2" }}</td>
-                <td class="text-center">{{ item.gstPercent }}%</td>
-                <td class="text-right">₹{{ item.amount | number: "1.0-2" }}</td>
+                <td>{{ item.quantity }}</td>
+                <td>{{ item.unit }}</td>
+                <td class="numeric">₹{{ item.rate | number: "1.2-2" }}</td>
+                <td class="numeric">
+                  {{ item.gstPercent | number: "1.0-2" }}%
+                </td>
+                <td class="numeric">₹{{ item.amount | number: "1.2-2" }}</td>
               </tr>
             </tbody>
           </table>
-        </div>
+        </section>
+
+        <section class="summary-grid">
+          <div class="summary-card">
+            <div class="summary-row">
+              <span>Subtotal</span
+              ><strong>₹{{ invoice.subtotal | number: "1.2-2" }}</strong>
+            </div>
+            <div class="summary-row">
+              <span>CGST</span
+              ><strong>₹{{ invoice.cgst | number: "1.2-2" }}</strong>
+            </div>
+            <div class="summary-row">
+              <span>SGST</span
+              ><strong>₹{{ invoice.sgst | number: "1.2-2" }}</strong>
+            </div>
+            <div class="summary-row">
+              <span>IGST</span
+              ><strong>₹{{ invoice.igst | number: "1.2-2" }}</strong>
+            </div>
+            <div class="summary-row total">
+              <span>Grand Total</span
+              ><strong>₹{{ invoice.grandTotal | number: "1.2-2" }}</strong>
+            </div>
+          </div>
+
+          <div class="words-card">
+            <p class="section-label">Amount in Words</p>
+            <strong>{{ invoice.amountInWords }}</strong>
+          </div>
+        </section>
 
         <mat-divider></mat-divider>
 
-        <!-- Tax Summary -->
-        <div class="summary-section">
-          <div class="summary-box">
-            <div class="summary-row">
-              <span>Subtotal</span>
-              <span>₹{{ subtotal | number: "1.0-2" }}</span>
-            </div>
-            <div class="summary-row">
-              <span>CGST (50%)</span>
-              <span>₹{{ cgst | number: "1.0-2" }}</span>
-            </div>
-            <div class="summary-row">
-              <span>SGST (50%)</span>
-              <span>₹{{ sgst | number: "1.0-2" }}</span>
-            </div>
-            <div class="summary-row">
-              <span>IGST</span>
-              <span>₹{{ igst | number: "1.0-2" }}</span>
-            </div>
-            <div class="summary-row grand-total">
-              <span>Grand Total</span>
-              <span>₹{{ grandTotal | number: "1.0-2" }}</span>
-            </div>
+        <section class="footer-grid">
+          <div class="declaration-card">
+            <p class="section-label">Declaration</p>
+            <p>{{ invoice.declaration }}</p>
           </div>
 
-          <div class="amount-words">
-            <strong>Amount in Words:</strong> {{ amountInWords }}
-          </div>
-        </div>
-
-        <mat-divider></mat-divider>
-
-        <!-- Declaration and Footer -->
-        <div class="declaration-section">
-          <div class="declaration">
-            <h4>Declaration:</h4>
-            <p>{{ declaration }}</p>
-          </div>
-
-          <div class="bank-details">
-            <h4>Bank Details:</h4>
-            <table class="bank-table">
-              <tr>
-                <td>Bank Name:</td>
-                <td>{{ bankName }}</td>
-              </tr>
-              <tr>
-                <td>Account No.:</td>
-                <td>{{ accountNumber }}</td>
-              </tr>
-              <tr>
-                <td>IFSC Code:</td>
-                <td>{{ ifscCode }}</td>
-              </tr>
-            </table>
-          </div>
-        </div>
-
-        <!-- Signature Section -->
-        <div class="signature-section">
-          <div class="signature-box">
-            <p>&nbsp;</p>
-            <p>&nbsp;</p>
+          <div class="signature-card">
+            <div class="signature-line"></div>
             <p>Authorized Signatory</p>
           </div>
+        </section>
+      </article>
+
+      <ng-template #emptyState>
+        <div class="empty-state">
+          <mat-icon>description</mat-icon>
+          <p>Enter invoice details to generate the live preview.</p>
         </div>
-      </div>
-    </div>
+      </ng-template>
+    </mat-card>
   `,
   styles: [
     `
-      .invoice-preview {
-        background-color: #f5f5f5;
-        min-height: 100vh;
-        padding: 20px;
+      :host {
+        display: block;
       }
 
-      .action-bar {
-        background-color: white;
-        padding: 12px 20px;
-        margin-bottom: 20px;
-        border-radius: 4px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      .preview-shell {
+        border-radius: 24px;
+        background: linear-gradient(180deg, #ffffff 0%, #faf7f0 100%);
+        box-shadow: 0 20px 50px rgba(15, 23, 42, 0.12);
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        overflow: hidden;
+      }
+
+      .preview-header {
         display: flex;
-        gap: 12px;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: center;
+        padding: 20px 24px 0;
       }
 
-      .invoice-document {
-        background-color: white;
-        padding: 40px;
-        max-width: 900px;
-        margin: 0 auto;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        border-radius: 4px;
+      .eyebrow {
+        margin: 0 0 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        font-size: 11px;
+        color: #8b5e34;
+        font-weight: 700;
       }
 
-      .invoice-header {
-        display: flex;
-        gap: 40px;
-        margin-bottom: 20px;
+      .preview-header h2 {
+        margin: 0;
+        font-size: 24px;
+        color: #1f2937;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: rgba(120, 53, 15, 0.08);
+        color: #7c2d12;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .invoice-sheet {
+        margin: 20px;
+        padding: 24px;
+        background: #fffdf9;
+        border: 1px solid #d6c8b8;
+        border-radius: 18px;
+      }
+
+      .top-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.8fr);
+        gap: 18px;
+      }
+
+      .company-block {
+        display: grid;
+        grid-template-columns: 88px 1fr;
+        gap: 16px;
         align-items: center;
       }
 
       .logo-placeholder {
-        width: 100px;
-        height: 100px;
-        border: 2px dashed #ddd;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 600;
-        color: #999;
-        border-radius: 4px;
+        width: 88px;
+        height: 88px;
+        border-radius: 16px;
+        border: 2px dashed #d4bfa7;
+        display: grid;
+        place-items: center;
+        color: #8b5e34;
+        font-weight: 800;
+        background: linear-gradient(145deg, #fff8f0, #f5e8db);
       }
 
-      .company-info {
-        flex: 1;
-      }
-
-      .company-info h1 {
-        margin: 0 0 8px 0;
+      .company-copy h3 {
+        margin: 0 0 8px;
         font-size: 24px;
+        color: #111827;
       }
 
-      .company-info p {
-        margin: 4px 0;
+      .company-copy p {
+        margin: 2px 0;
+        color: #4b5563;
         font-size: 13px;
-        color: #666;
+        line-height: 1.45;
       }
 
-      .invoice-title {
-        text-align: center;
-        padding: 20px 0;
+      .meta-block {
+        border: 1px solid #dccbb7;
+        border-radius: 16px;
+        padding: 16px;
+        background: linear-gradient(180deg, #fff8ef 0%, #fff 100%);
       }
 
-      .invoice-title h2 {
-        margin: 0;
-        font-size: 20px;
-        font-weight: 600;
-      }
-
-      .invoice-details-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 20px;
-        margin: 20px 0;
-        font-size: 13px;
-      }
-
-      .invoice-details-grid p {
-        margin: 4px 0;
-      }
-
-      .invoice-details-grid strong {
-        font-weight: 600;
-      }
-
-      .party-details {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 40px;
-        margin: 20px 0;
+      .meta-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 6px 0;
+        border-bottom: 1px dotted #e5d8c9;
         font-size: 13px;
       }
 
-      .party-section h4 {
-        margin: 0 0 12px 0;
-        font-weight: 600;
-        font-size: 14px;
+      .meta-row:last-child {
+        border-bottom: none;
       }
 
-      .party-section p {
-        margin: 4px 0;
+      .meta-row span {
+        color: #6b7280;
       }
 
-      .items-section {
-        margin: 20px 0;
-      }
-
-      .invoice-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 13px;
-      }
-
-      .invoice-table th {
-        background-color: #f5f5f5;
-        border: 1px solid #ddd;
-        padding: 8px;
-        text-align: left;
-        font-weight: 600;
-      }
-
-      .invoice-table td {
-        border: 1px solid #ddd;
-        padding: 8px;
-      }
-
-      .text-center {
-        text-align: center;
-      }
-
-      .text-right {
+      .meta-row strong {
+        color: #111827;
         text-align: right;
       }
 
-      .summary-section {
-        margin: 20px 0;
+      .invoice-title {
+        margin: 18px 0;
+        text-align: center;
+        border-top: 2px solid #111827;
+        border-bottom: 2px solid #111827;
+        padding: 8px 0;
+        font-weight: 800;
+        letter-spacing: 0.18em;
       }
 
-      .summary-box {
-        max-width: 350px;
-        margin-left: auto;
-        border: 1px solid #ddd;
+      .party-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: 18px;
+      }
+
+      .party-card {
+        border: 1px solid #dccbb7;
+        border-radius: 16px;
+        padding: 14px;
+        background: #fff;
+      }
+
+      .party-card h4 {
+        margin: 4px 0 8px;
+        font-size: 15px;
+        color: #111827;
+      }
+
+      .party-card p {
+        margin: 3px 0;
+        color: #4b5563;
         font-size: 13px;
+        line-height: 1.4;
+      }
+
+      .section-label {
+        margin: 0;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        font-size: 10px;
+        font-weight: 800;
+        color: #8b5e34;
+      }
+
+      .table-section {
+        overflow-x: auto;
+        border: 1px solid #dccbb7;
+        border-radius: 16px;
+        margin-bottom: 18px;
+      }
+
+      .line-item-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 820px;
+      }
+
+      .line-item-table th,
+      .line-item-table td {
+        border-bottom: 1px solid #e9dccf;
+        padding: 12px 10px;
+        font-size: 13px;
+      }
+
+      .line-item-table th {
+        background: #f4e9dc;
+        color: #3f2d20;
+        text-align: left;
+        font-weight: 700;
+      }
+
+      .line-item-table tbody tr:last-child td {
+        border-bottom: none;
+      }
+
+      .numeric {
+        text-align: right;
+        white-space: nowrap;
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+        gap: 14px;
+        margin-bottom: 16px;
+      }
+
+      .summary-card,
+      .words-card,
+      .declaration-card,
+      .signature-card {
+        border: 1px solid #dccbb7;
+        border-radius: 16px;
+        background: #fff;
+        padding: 14px;
       }
 
       .summary-row {
         display: flex;
         justify-content: space-between;
-        padding: 8px 12px;
-        border-bottom: 1px solid #ddd;
-      }
-
-      .summary-row.grand-total {
-        background-color: #f0f0f0;
-        font-weight: 600;
-        font-size: 14px;
-        border-bottom: none;
-      }
-
-      .amount-words {
-        margin: 12px 0;
-        font-size: 13px;
-        padding: 8px;
-        background-color: #f9f9f9;
-        border-radius: 4px;
-      }
-
-      .declaration-section {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 20px;
-        margin: 20px 0;
+        padding: 6px 0;
         font-size: 13px;
       }
 
-      .declaration h4,
-      .bank-details h4 {
-        margin: 0 0 8px 0;
-        font-weight: 600;
+      .summary-row.total {
+        margin-top: 4px;
+        padding-top: 10px;
+        border-top: 1px solid #dccbb7;
+        font-size: 15px;
+        font-weight: 800;
       }
 
-      .declaration p {
-        margin: 0;
+      .words-card strong {
+        display: block;
+        margin-top: 8px;
+        color: #111827;
         line-height: 1.5;
       }
 
-      .bank-table {
-        width: 100%;
-        border-collapse: collapse;
+      .footer-grid {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 14px;
+        margin-top: 16px;
+      }
+
+      .declaration-card p:last-child {
+        margin: 8px 0 0;
+        color: #374151;
         font-size: 13px;
+        line-height: 1.55;
       }
 
-      .bank-table td {
-        padding: 4px 0;
-      }
-
-      .bank-table td:first-child {
-        font-weight: 600;
-        width: 50%;
-      }
-
-      .signature-section {
-        display: flex;
-        justify-content: flex-end;
-        margin-top: 40px;
-      }
-
-      .signature-box {
-        width: 200px;
+      .signature-card {
+        display: grid;
+        align-content: end;
+        min-height: 120px;
         text-align: center;
-        font-size: 12px;
       }
 
-      .signature-box p {
-        margin: 0;
+      .signature-line {
+        border-top: 1px solid #111827;
+        width: 75%;
+        justify-self: center;
+        margin-bottom: 10px;
       }
 
-      @media print {
-        .invoice-preview {
-          background-color: white;
-          padding: 0;
-        }
+      .empty-state {
+        display: grid;
+        place-items: center;
+        min-height: 360px;
+        color: #6b7280;
+        gap: 10px;
+      }
 
-        .action-bar {
-          display: none;
-        }
+      .empty-state mat-icon {
+        width: 44px;
+        height: 44px;
+        font-size: 44px;
+      }
 
-        .invoice-document {
-          max-width: 100%;
-          box-shadow: none;
-          padding: 20px;
+      @media (max-width: 1100px) {
+        .top-grid,
+        .summary-grid,
+        .footer-grid,
+        .party-grid {
+          grid-template-columns: 1fr;
         }
       }
 
       @media (max-width: 768px) {
-        .invoice-document {
-          padding: 20px;
-        }
-
-        .invoice-header {
+        .preview-header {
           flex-direction: column;
-          gap: 20px;
+          align-items: flex-start;
         }
 
-        .invoice-details-grid,
-        .party-details,
-        .declaration-section {
+        .invoice-sheet {
+          margin: 14px;
+          padding: 16px;
+        }
+
+        .company-block {
           grid-template-columns: 1fr;
         }
       }
@@ -440,69 +495,13 @@ import { MatDividerModule } from "@angular/material/divider";
   ],
 })
 export class InvoicePreviewComponent {
-  // Sample invoice data - would be passed from parent component
-  companyName = "Your Company Ltd.";
-  gstin = "27AABCU9603R1Z5";
-  address = "123 Business Street, Mumbai, MH 400001";
-  phone = "+91 9876543210";
+  @Input() invoice: Invoice | null = null;
 
-  invoiceNumber = "INV-001-2026";
-  invoiceDate = new Date("2026-05-12");
-  vehicleNumber = "MH01AB1234";
-  deliveryNote = "DN-001";
-  termsOfPayment = "Net 30";
+  readonly company = this.mockDataService.getCompanyProfile();
 
-  buyerName = "ABC Enterprises";
-  buyerGstin = "18AABCR5055K1Z0";
-  buyerAddress = "456 Customer Avenue, Delhi, DL 110001";
-  buyerState = "Delhi";
+  constructor(private readonly mockDataService: MockDataService) {}
 
-  consigneeName = "ABC Enterprises Branch";
-  consigneeAddress = "456 Customer Avenue, Delhi, DL 110001";
-  consigneeState = "Delhi";
-
-  items = [
-    {
-      productName: "Product A",
-      hsnSac: "8471",
-      quantity: 10,
-      rate: 1000,
-      gstPercent: 18,
-      amount: 11800,
-    },
-    {
-      productName: "Service B",
-      hsnSac: "9983",
-      quantity: 5,
-      rate: 2000,
-      gstPercent: 9,
-      amount: 10900,
-    },
-  ];
-
-  subtotal = 30000;
-  cgst = 2700;
-  sgst = 2700;
-  igst = 0;
-  grandTotal = 35400;
-
-  amountInWords = "Thirty Five Thousand Four Hundred Only";
-  declaration =
-    "We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.";
-
-  bankName = "State Bank of India";
-  accountNumber = "1234567890";
-  ifscCode = "SBIN0001234";
-
-  printInvoice(): void {
-    window.print();
-  }
-
-  downloadPDF(): void {
-    alert("PDF download feature coming soon!");
-  }
-
-  closePreview(): void {
-    window.history.back();
+  trackByItemId(_: number, item: Invoice["items"][number]): string {
+    return item.id;
   }
 }

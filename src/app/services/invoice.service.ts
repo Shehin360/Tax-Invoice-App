@@ -1,103 +1,83 @@
-import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable } from 'rxjs';
-import { InvoiceForm, InvoiceItem, TaxSummary } from '../models/invoice.model';
+import { Injectable } from "@angular/core";
+import { BehaviorSubject, Observable } from "rxjs";
+
+import { Invoice } from "../models/invoice.model";
+import { MockDataService } from "./mock-data.service";
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: "root",
 })
 export class InvoiceService {
-  private invoicesSubject = new BehaviorSubject<InvoiceForm[]>(this.getMockInvoices());
-  public invoices$ = this.invoicesSubject.asObservable();
+  private readonly invoicesSubject = new BehaviorSubject<Invoice[]>(
+    this.getMockInvoices(),
+  );
+  public readonly invoices$ = this.invoicesSubject.asObservable();
 
-  constructor() {}
+  constructor(private readonly mockDataService: MockDataService) {}
 
-  getInvoices(): Observable<InvoiceForm[]> {
+  getInvoices(): Observable<Invoice[]> {
     return this.invoices$;
   }
 
-  getMockInvoices(): InvoiceForm[] {
+  addInvoice(invoice: Invoice): void {
+    this.invoicesSubject.next([invoice, ...this.invoicesSubject.value]);
+  }
+
+  getMockInvoices(): Invoice[] {
     return [
+      this.mockDataService.getSampleInvoiceDraft() as Invoice,
       {
-        businessName: 'Your Company Ltd.',
-        gstin: '27AABCU9603R1Z5',
-        businessAddress: '123 Business Street, Mumbai, MH 400001',
-        businessPhone: '+91 9876543210',
-        buyerName: 'ABC Enterprises',
-        buyerGstin: '18AABCR5055K1Z0',
-        buyerAddress: '456 Customer Avenue, Delhi, DL 110001',
-        buyerState: 'Delhi',
-        consigneeName: 'ABC Enterprises Branch',
-        consigneeAddress: '456 Customer Avenue, Delhi, DL 110001',
-        consigneeState: 'Delhi',
-        invoiceNumber: 'INV-001-2026',
-        invoiceDate: '2026-05-12',
-        vehicleNumber: 'MH01AB1234',
-        deliveryNote: 'DN-001',
-        termsOfPayment: 'Net 30',
+        invoiceNumber: "INV-2026-002",
+        invoiceDate: "2026-05-16",
+        deliveryNote: "DN-002",
+        vehicleNumber: "KL-07-CD-5678",
+        termsOfPayment: "Against Delivery",
+        buyerName: "ABC Traders",
+        buyerGstin: "27ABCTR5678L1Z2",
+        buyerAddress: "88 Market Street, Mumbai",
+        buyerState: "Maharashtra",
+        consigneeName: "ABC Traders Warehouse",
+        consigneeGstin: "27ABCTR5678L1Z2",
+        consigneeAddress: "88 Market Street, Mumbai",
+        consigneeState: "Maharashtra",
         items: [
           {
-            id: '1',
+            id: "inv-2-item-1",
             slNo: 1,
-            productName: 'Product A',
-            hsnSac: '8471',
-            quantity: 10,
-            rate: 1000,
-            gstPercent: 18,
-            amount: 11800
+            productId: "prod-2",
+            productName: "Pepper",
+            hsnSac: "0904",
+            quantity: 8,
+            unit: "Kg",
+            rate: 750,
+            gstPercent: 5,
+            amount: 6000,
           },
           {
-            id: '2',
+            id: "inv-2-item-2",
             slNo: 2,
-            productName: 'Service B',
-            hsnSac: '9983',
-            quantity: 5,
-            rate: 2000,
-            gstPercent: 9,
-            amount: 10900
-          }
+            productId: "prod-3",
+            productName: "Cardamom",
+            hsnSac: "0908",
+            quantity: 2,
+            unit: "Kg",
+            rate: 1450,
+            gstPercent: 5,
+            amount: 2900,
+          },
         ],
-        subtotal: 30000,
-        cgst: 2700,
-        sgst: 2700,
+        subtotal: 8900,
+        cgst: 222.5,
+        sgst: 222.5,
         igst: 0,
-        grandTotal: 35400,
-        amountInWords: 'Thirty Five Thousand Four Hundred Only',
-        declaration: 'We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.'
-      }
+        grandTotal: 9345,
+        amountInWords: "Nine Thousand Three Hundred Forty Five Only",
+        declaration: this.mockDataService.getDefaultDeclaration(),
+      },
     ];
   }
 
-  calculateTaxSummary(items: InvoiceItem[]): TaxSummary {
-    let subtotal = 0;
-    let totalTax = 0;
-
-    items.forEach(item => {
-      const itemAmount = item.quantity * item.rate;
-      const itemTax = (itemAmount * item.gstPercent) / 100;
-      subtotal += itemAmount;
-      totalTax += itemTax;
-    });
-
-    // Simplified: assumes both CGST and SGST for intra-state
-    const cgst = totalTax / 2;
-    const sgst = totalTax / 2;
-
-    return {
-      subtotal,
-      cgst,
-      sgst,
-      igst: 0,
-      grandTotal: subtotal + totalTax
-    };
-  }
-
-  calculateItemAmount(item: InvoiceItem): number {
-    const baseAmount = item.quantity * item.rate;
-    const tax = (baseAmount * item.gstPercent) / 100;
-    return baseAmount + tax;
-  }
-
-  getRecentInvoices(limit: number = 5): InvoiceForm[] {
+  getRecentInvoices(limit: number = 5): Invoice[] {
     return this.getMockInvoices().slice(0, limit);
   }
 }
