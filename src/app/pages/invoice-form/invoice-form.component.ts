@@ -17,9 +17,11 @@ import { MatFormFieldModule } from "@angular/material/form-field";
 import { MatIconModule } from "@angular/material/icon";
 import { MatInputModule } from "@angular/material/input";
 import { MatNativeDateModule } from "@angular/material/core";
+import { MatSnackBar, MatSnackBarModule } from "@angular/material/snack-bar";
 import { MatSelectModule } from "@angular/material/select";
 import { MatTableModule } from "@angular/material/table";
 import { MatTooltipModule } from "@angular/material/tooltip";
+import { ActivatedRoute } from "@angular/router";
 
 import { InvoicePreviewComponent } from "../../components/invoice-preview/invoice-preview.component";
 import {
@@ -32,6 +34,8 @@ import {
 import { InvoiceCalculationService } from "../../services/invoice-calculation.service";
 import { InvoiceService } from "../../services/invoice.service";
 import { MockDataService } from "../../services/mock-data.service";
+import { CustomerService } from "../../services/customer.service";
+import { ProductService } from "../../services/product.service";
 
 type InvoiceItemControls = {
   productId: FormControl<string>;
@@ -77,6 +81,7 @@ type InvoiceFormControls = {
     MatIconModule,
     MatDatepickerModule,
     MatNativeDateModule,
+    MatSnackBarModule,
     MatSelectModule,
     MatDividerModule,
     MatTooltipModule,
@@ -744,9 +749,10 @@ export class InvoiceFormComponent implements OnInit {
   };
   amountInWords = "Zero Only";
   statusMessage = "";
+  private selectedInvoiceId: string | null = null;
 
-  readonly customers: Customer[] = this.mockDataService.getCustomers();
-  readonly products: Product[] = this.mockDataService.getProducts();
+  customers: Customer[] = [];
+  products: Product[] = [];
   readonly displayedColumns = [
     "slNo",
     "productName",
@@ -764,11 +770,28 @@ export class InvoiceFormComponent implements OnInit {
     private readonly calculationService: InvoiceCalculationService,
     private readonly mockDataService: MockDataService,
     private readonly invoiceService: InvoiceService,
+    private readonly customerService: CustomerService,
+    private readonly productService: ProductService,
+    private readonly snackBar: MatSnackBar,
+    private readonly route: ActivatedRoute,
   ) {}
 
   ngOnInit(): void {
     this.invoiceForm = this.buildForm();
-    this.loadDraft(this.mockDataService.getSampleInvoiceDraft());
+
+    this.customerService.customers$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((customers) => {
+        this.customers = customers;
+      });
+
+    this.productService.products$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((products) => {
+        this.products = products;
+      });
+
+    void this.loadInitialState();
 
     this.invoiceForm.valueChanges
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -897,7 +920,7 @@ export class InvoiceFormComponent implements OnInit {
     this.recalculateInvoice();
   }
 
-  saveInvoice(): void {
+  async saveInvoice(): Promise<void> {
     if (this.invoiceForm.invalid || this.itemsArray.length === 0) {
       this.invoiceForm.markAllAsTouched();
       this.itemsArray.controls.forEach((group) => group.markAllAsTouched());
@@ -907,14 +930,28 @@ export class InvoiceFormComponent implements OnInit {
     }
 
     const invoice = this.buildInvoicePayload();
-    this.invoiceService.addInvoice(invoice);
-    this.statusMessage = `Invoice ${invoice.invoiceNumber} saved in temporary memory.`;
+    try {
+      await this.invoiceService.saveInvoice(invoice);
+      this.statusMessage = `Invoice ${invoice.invoiceNumber} saved successfully.`;
+      this.snackBar.open(`Invoice ${invoice.invoiceNumber} saved`, "Close", {
+        duration: 3000,
+      });
+      await this.initializeInvoiceNumber();
+    } catch (error) {
+      console.error(error);
+      this.statusMessage = "Unable to save the invoice. Please try again.";
+      this.snackBar.open("Failed to save invoice", "Close", {
+        duration: 4000,
+      });
+    }
   }
 
   resetForm(): void {
     this.loadDraft(this.mockDataService.getSampleInvoiceDraft());
     this.recalculateInvoice();
     this.statusMessage = "Draft reset to the sample invoice.";
+    this.selectedInvoiceId = null;
+    void this.initializeInvoiceNumber();
   }
 
   private buildForm(): FormGroup<InvoiceFormControls> {
@@ -1021,6 +1058,40 @@ export class InvoiceFormComponent implements OnInit {
     }
   }
 
+  private async initializeInvoiceNumber(): Promise<void> {
+    if (this.selectedInvoiceId) {
+      return;
+    }
+
+    const nextInvoiceNumber = await this.invoiceService.getNextInvoiceNumber(
+      this.invoiceForm.controls.invoiceDate.value ?? undefined,
+    );
+    this.invoiceForm.controls.invoiceNumber.setValue(nextInvoiceNumber, {
+      emitEvent: false,
+    });
+    this.recalculateInvoice();
+  }
+
+  private async loadInitialState(): Promise<void> {
+    const invoiceId = this.route.snapshot.queryParamMap.get("id");
+
+    if (invoiceId) {
+      const invoice = await this.invoiceService.getInvoiceById(invoiceId);
+
+      if (invoice) {
+        this.selectedInvoiceId = invoice.id ?? invoiceId;
+        this.loadDraft(invoice);
+        this.recalculateInvoice();
+        this.statusMessage = `Editing invoice ${invoice.invoiceNumber}.`;
+        return;
+      }
+    }
+
+    this.loadDraft(this.mockDataService.getSampleInvoiceDraft());
+    this.recalculateInvoice();
+    await this.initializeInvoiceNumber();
+  }
+
   private recalculateInvoice(): void {
     const items = this.itemRows.map((group, index) => {
       const productId = group.controls.productId.value;
@@ -1106,6 +1177,7 @@ export class InvoiceFormComponent implements OnInit {
       grandTotal: this.taxSummary.grandTotal,
       amountInWords: this.amountInWords,
       declaration: raw.declaration,
+      id: this.selectedInvoiceId ?? undefined,
     };
   }
 

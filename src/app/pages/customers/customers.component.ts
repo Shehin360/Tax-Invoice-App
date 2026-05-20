@@ -35,7 +35,7 @@ import { Customer } from "../../models/customer.model";
         <mat-card-header>
           <div class="header-content">
             <mat-card-title>Customer List</mat-card-title>
-            <button mat-raised-button color="primary">
+            <button mat-raised-button color="primary" (click)="addCustomer()">
               <mat-icon>add</mat-icon> Add Customer
             </button>
           </div>
@@ -101,7 +101,11 @@ import { Customer } from "../../models/customer.model";
               <ng-container matColumnDef="actions">
                 <th mat-header-cell *matHeaderCellDef>Actions</th>
                 <td mat-cell *matCellDef="let element">
-                  <button mat-icon-button color="primary" matTooltip="Edit">
+                  <button
+                    mat-icon-button
+                    color="primary"
+                    matTooltip="Edit"
+                    (click)="editCustomer(element)">
                     <mat-icon>edit</mat-icon>
                   </button>
                   <button
@@ -317,9 +321,74 @@ export class CustomersComponent implements OnInit {
     }
   }
 
-  deleteCustomer(customerId: string): void {
+  addCustomer(): void {
+    this.editCustomer({
+      id: `${Date.now()}`,
+      name: "",
+      gstin: "",
+      address: "",
+      city: "",
+      state: "",
+      phone: "",
+      email: "",
+      createdDate: new Date().toISOString().slice(0, 10),
+    });
+  }
+
+  editCustomer(customer: Customer): void {
+    const name = prompt("Customer name", customer.name);
+    if (name === null) {
+      return;
+    }
+
+    const gstin = prompt("GSTIN", customer.gstin);
+    if (gstin === null) {
+      return;
+    }
+
+    const address = prompt("Address", customer.address);
+    if (address === null) {
+      return;
+    }
+
+    const city = prompt("City", customer.city);
+    if (city === null) {
+      return;
+    }
+
+    const state = prompt("State", customer.state);
+    if (state === null) {
+      return;
+    }
+
+    const phone = prompt("Phone", customer.phone);
+    if (phone === null) {
+      return;
+    }
+
+    const email = prompt("Email", customer.email);
+    if (email === null) {
+      return;
+    }
+
+    void this.customerService.saveCustomer({
+      ...customer,
+      id: customer.id || `${Date.now()}`,
+      name,
+      gstin,
+      address,
+      city,
+      state,
+      phone,
+      email,
+      createdDate:
+        customer.createdDate || new Date().toISOString().slice(0, 10),
+    });
+  }
+
+  async deleteCustomer(customerId: string): Promise<void> {
     if (confirm("Are you sure you want to delete this customer?")) {
-      this.customerService.deleteCustomer(customerId);
+      await this.customerService.deleteCustomer(customerId);
     }
   }
 }

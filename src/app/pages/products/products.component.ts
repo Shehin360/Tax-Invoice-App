@@ -35,7 +35,7 @@ import { Product } from "../../models/product.model";
         <mat-card-header>
           <div class="header-content">
             <mat-card-title>Product List</mat-card-title>
-            <button mat-raised-button color="primary">
+            <button mat-raised-button color="primary" (click)="addProduct()">
               <mat-icon>add</mat-icon> Add Product
             </button>
           </div>
@@ -113,7 +113,11 @@ import { Product } from "../../models/product.model";
               <ng-container matColumnDef="actions">
                 <th mat-header-cell *matHeaderCellDef>Actions</th>
                 <td mat-cell *matCellDef="let element">
-                  <button mat-icon-button color="primary" matTooltip="Edit">
+                  <button
+                    mat-icon-button
+                    color="primary"
+                    matTooltip="Edit"
+                    (click)="editProduct(element)">
                     <mat-icon>edit</mat-icon>
                   </button>
                   <button
@@ -337,9 +341,66 @@ export class ProductsComponent implements OnInit {
     }
   }
 
-  deleteProduct(productId: string): void {
+  addProduct(): void {
+    this.editProduct({
+      id: `${Date.now()}`,
+      name: "",
+      hsnSac: "",
+      description: "",
+      rate: 0,
+      gstPercent: 0,
+      unit: "",
+      createdDate: new Date().toISOString().slice(0, 10),
+    });
+  }
+
+  editProduct(product: Product): void {
+    const name = prompt("Product name", product.name);
+    if (name === null) {
+      return;
+    }
+
+    const hsnSac = prompt("HSN/SAC", product.hsnSac);
+    if (hsnSac === null) {
+      return;
+    }
+
+    const description = prompt("Description", product.description);
+    if (description === null) {
+      return;
+    }
+
+    const rateValue = prompt("Rate", String(product.rate));
+    if (rateValue === null) {
+      return;
+    }
+
+    const gstValue = prompt("GST %", String(product.gstPercent));
+    if (gstValue === null) {
+      return;
+    }
+
+    const unit = prompt("Unit", product.unit);
+    if (unit === null) {
+      return;
+    }
+
+    void this.productService.saveProduct({
+      ...product,
+      id: product.id || `${Date.now()}`,
+      name,
+      hsnSac,
+      description,
+      rate: Number(rateValue),
+      gstPercent: Number(gstValue),
+      unit,
+      createdDate: product.createdDate || new Date().toISOString().slice(0, 10),
+    });
+  }
+
+  async deleteProduct(productId: string): Promise<void> {
     if (confirm("Are you sure you want to delete this product?")) {
-      this.productService.deleteProduct(productId);
+      await this.productService.deleteProduct(productId);
     }
   }
 }

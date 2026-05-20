@@ -2,25 +2,65 @@ import { Injectable } from "@angular/core";
 import { BehaviorSubject, Observable } from "rxjs";
 
 import { Invoice } from "../models/invoice.model";
+import { InvoiceDbService } from "./invoice-db.service";
 import { MockDataService } from "./mock-data.service";
 
 @Injectable({
   providedIn: "root",
 })
 export class InvoiceService {
-  private readonly invoicesSubject = new BehaviorSubject<Invoice[]>(
-    this.getMockInvoices(),
-  );
+  private readonly invoicesSubject = new BehaviorSubject<Invoice[]>([]);
   public readonly invoices$ = this.invoicesSubject.asObservable();
 
-  constructor(private readonly mockDataService: MockDataService) {}
+  constructor(
+    private readonly mockDataService: MockDataService,
+    private readonly invoiceDbService: InvoiceDbService,
+  ) {
+    void this.refreshInvoices();
+  }
 
   getInvoices(): Observable<Invoice[]> {
     return this.invoices$;
   }
 
-  addInvoice(invoice: Invoice): void {
-    this.invoicesSubject.next([invoice, ...this.invoicesSubject.value]);
+  async addInvoice(invoice: Invoice): Promise<void> {
+    const saved = await this.invoiceDbService.saveInvoice(invoice);
+    this.invoicesSubject.next([
+      saved as Invoice,
+      ...this.invoicesSubject.value,
+    ]);
+  }
+
+  async saveInvoice(invoice: Invoice): Promise<Invoice> {
+    const saved = await this.invoiceDbService.saveInvoice(invoice);
+    await this.refreshInvoices();
+    return saved as Invoice;
+  }
+
+  async deleteInvoice(invoiceId: string): Promise<void> {
+    await this.invoiceDbService.deleteInvoice(invoiceId);
+    await this.refreshInvoices();
+  }
+
+  async getInvoiceById(invoiceId: string): Promise<Invoice | null> {
+    return (await this.invoiceDbService.getInvoiceById(
+      invoiceId,
+    )) as Invoice | null;
+  }
+
+  async getNextInvoiceNumber(invoiceDate?: string | Date): Promise<string> {
+    return this.invoiceDbService.getNextInvoiceNumber(invoiceDate);
+  }
+
+  async refreshInvoices(): Promise<void> {
+    const invoices =
+      (await this.invoiceDbService.getInvoices()) as unknown as Invoice[];
+    if (invoices.length > 0) {
+      this.invoicesSubject.next(invoices);
+      return;
+    }
+
+    this.invoicesSubject.next(this.getMockInvoices());
   }
 
   getMockInvoices(): Invoice[] {

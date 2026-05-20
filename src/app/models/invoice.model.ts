@@ -43,6 +43,7 @@ export interface InvoiceTaxSummary {
 }
 
 export interface Invoice extends InvoiceTaxSummary {
+  id?: string;
   invoiceNumber: string;
   invoiceDate: string | Date;
   deliveryNote: string;

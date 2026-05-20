@@ -58,6 +58,14 @@ import { MatTooltipModule } from "@angular/material/tooltip";
             <span matListItemTitle>New Invoice</span>
           </mat-list-item>
 
+          <mat-list-item
+            routerLink="/history"
+            routerLinkActive="active"
+            (click)="closeSidenavMobile()">
+            <mat-icon matListItemIcon>history</mat-icon>
+            <span matListItemTitle>Invoice History</span>
+          </mat-list-item>
+
           <h2 mat-subheader>MANAGEMENT</h2>
 
           <mat-list-item

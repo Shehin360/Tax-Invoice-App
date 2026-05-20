@@ -1,6 +1,7 @@
 import { Injectable } from "@angular/core";
 import { BehaviorSubject, Observable } from "rxjs";
 import { CompanySettings } from "../models/settings.model";
+import { SettingsDbService } from "./settings-db.service";
 
 @Injectable({
   providedIn: "root",
@@ -11,13 +12,21 @@ export class SettingsService {
   );
   public settings$ = this.settingsSubject.asObservable();
 
-  constructor() {}
+  constructor(private readonly settingsDbService: SettingsDbService) {
+    void this.refreshSettings();
+  }
 
   getSettings(): Observable<CompanySettings> {
     return this.settings$;
   }
 
-  updateSettings(settings: CompanySettings): void {
+  async updateSettings(settings: CompanySettings): Promise<void> {
+    await this.settingsDbService.saveSettings(settings);
+    this.settingsSubject.next(settings);
+  }
+
+  async refreshSettings(): Promise<void> {
+    const settings = await this.settingsDbService.getSettings();
     this.settingsSubject.next(settings);
   }
 
