@@ -131,6 +131,11 @@ export interface ElectronInvoiceQueryOptions {
   searchTerm?: string;
   fromDate?: string;
   toDate?: string;
-  sortBy?: "invoice_date" | "invoice_number" | "grand_total" | "buyer_name";
+  sortBy?:
+    | "invoice_date"
+    | "invoice_number"
+    | "grand_total"
+    | "buyer_name"
+    | "created_at";
   sortDirection?: "ASC" | "DESC";
 }

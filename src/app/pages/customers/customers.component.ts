@@ -9,6 +9,7 @@ import { MatButtonModule } from "@angular/material/button";
 import { MatIconModule } from "@angular/material/icon";
 import { MatTooltipModule } from "@angular/material/tooltip";
 import { MatDividerModule } from "@angular/material/divider";
+import { MatSnackBar, MatSnackBarModule } from "@angular/material/snack-bar";
 import { CustomerService } from "../../services/customer.service";
 import { Customer } from "../../models/customer.model";
 
@@ -26,6 +27,7 @@ import { Customer } from "../../models/customer.model";
     MatIconModule,
     MatTooltipModule,
     MatDividerModule,
+    MatSnackBarModule,
   ],
   template: `
     <div class="customers-container">
@@ -35,7 +37,11 @@ import { Customer } from "../../models/customer.model";
         <mat-card-header>
           <div class="header-content">
             <mat-card-title>Customer List</mat-card-title>
-            <button mat-raised-button color="primary" (click)="addCustomer()">
+            <button
+              mat-raised-button
+              color="primary"
+              (click)="addCustomer()"
+              [disabled]="savingCustomer">
               <mat-icon>add</mat-icon> Add Customer
             </button>
           </div>
@@ -300,9 +306,13 @@ export class CustomersComponent implements OnInit {
   customers: Customer[] = [];
   filteredCustomers: Customer[] = [];
   searchTerm = "";
+  savingCustomer = false;
   displayedColumns = ["name", "gstin", "email", "state", "phone", "actions"];
 
-  constructor(private customerService: CustomerService) {}
+  constructor(
+    private customerService: CustomerService,
+    private snackBar: MatSnackBar,
+  ) {}
 
   ngOnInit(): void {
     this.customerService.customers$.subscribe((customers) => {
@@ -321,8 +331,8 @@ export class CustomersComponent implements OnInit {
     }
   }
 
-  addCustomer(): void {
-    this.editCustomer({
+  async addCustomer(): Promise<void> {
+    await this.editCustomer({
       id: `${Date.now()}`,
       name: "",
       gstin: "",
@@ -335,7 +345,7 @@ export class CustomersComponent implements OnInit {
     });
   }
 
-  editCustomer(customer: Customer): void {
+  async editCustomer(customer: Customer): Promise<void> {
     const name = prompt("Customer name", customer.name);
     if (name === null) {
       return;
@@ -371,19 +381,32 @@ export class CustomersComponent implements OnInit {
       return;
     }
 
-    void this.customerService.saveCustomer({
-      ...customer,
-      id: customer.id || `${Date.now()}`,
-      name,
-      gstin,
-      address,
-      city,
-      state,
-      phone,
-      email,
-      createdDate:
-        customer.createdDate || new Date().toISOString().slice(0, 10),
-    });
+    this.savingCustomer = true;
+
+    try {
+      await this.customerService.saveCustomer({
+        ...customer,
+        id: customer.id || `${Date.now()}`,
+        name,
+        gstin,
+        address,
+        city,
+        state,
+        phone,
+        email,
+        createdDate:
+          customer.createdDate || new Date().toISOString().slice(0, 10),
+      });
+
+      this.snackBar.open("Customer saved", "Close", { duration: 2500 });
+    } catch (error) {
+      console.error(error);
+      this.snackBar.open("Failed to save customer", "Close", {
+        duration: 4000,
+      });
+    } finally {
+      this.savingCustomer = false;
+    }
   }
 
   async deleteCustomer(customerId: string): Promise<void> {

@@ -1,5 +1,8 @@
 import { ipcMain } from "electron";
-import { customerRepository } from "../database/customer.repository";
+import {
+  customerRepository,
+  type CustomerPayload,
+} from "../database/customer.repository";
 
 export function registerCustomerIpc(): void {
   ipcMain.handle("customer:get-all", async (_event, searchTerm?: string) => {
@@ -10,7 +13,7 @@ export function registerCustomerIpc(): void {
     return customerRepository.getCustomerById(id);
   });
 
-  ipcMain.handle("customer:save", async (_event, payload) => {
+  ipcMain.handle("customer:save", async (_event, payload: CustomerPayload) => {
     return customerRepository.saveCustomer(payload);
   });
 

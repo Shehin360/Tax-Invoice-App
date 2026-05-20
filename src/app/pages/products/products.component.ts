@@ -9,6 +9,7 @@ import { MatButtonModule } from "@angular/material/button";
 import { MatIconModule } from "@angular/material/icon";
 import { MatTooltipModule } from "@angular/material/tooltip";
 import { MatDividerModule } from "@angular/material/divider";
+import { MatSnackBar, MatSnackBarModule } from "@angular/material/snack-bar";
 import { ProductService } from "../../services/product.service";
 import { Product } from "../../models/product.model";
 
@@ -26,6 +27,7 @@ import { Product } from "../../models/product.model";
     MatIconModule,
     MatTooltipModule,
     MatDividerModule,
+    MatSnackBarModule,
   ],
   template: `
     <div class="products-container">
@@ -35,7 +37,11 @@ import { Product } from "../../models/product.model";
         <mat-card-header>
           <div class="header-content">
             <mat-card-title>Product List</mat-card-title>
-            <button mat-raised-button color="primary" (click)="addProduct()">
+            <button
+              mat-raised-button
+              color="primary"
+              (click)="addProduct()"
+              [disabled]="savingProduct">
               <mat-icon>add</mat-icon> Add Product
             </button>
           </div>
@@ -312,6 +318,7 @@ export class ProductsComponent implements OnInit {
   products: Product[] = [];
   filteredProducts: Product[] = [];
   searchTerm = "";
+  savingProduct = false;
   displayedColumns = [
     "name",
     "hsnSac",
@@ -322,7 +329,10 @@ export class ProductsComponent implements OnInit {
     "actions",
   ];
 
-  constructor(private productService: ProductService) {}
+  constructor(
+    private productService: ProductService,
+    private snackBar: MatSnackBar,
+  ) {}
 
   ngOnInit(): void {
     this.productService.products$.subscribe((products) => {
@@ -341,8 +351,8 @@ export class ProductsComponent implements OnInit {
     }
   }
 
-  addProduct(): void {
-    this.editProduct({
+  async addProduct(): Promise<void> {
+    await this.editProduct({
       id: `${Date.now()}`,
       name: "",
       hsnSac: "",
@@ -354,7 +364,7 @@ export class ProductsComponent implements OnInit {
     });
   }
 
-  editProduct(product: Product): void {
+  async editProduct(product: Product): Promise<void> {
     const name = prompt("Product name", product.name);
     if (name === null) {
       return;
@@ -385,17 +395,41 @@ export class ProductsComponent implements OnInit {
       return;
     }
 
-    void this.productService.saveProduct({
-      ...product,
-      id: product.id || `${Date.now()}`,
-      name,
-      hsnSac,
-      description,
-      rate: Number(rateValue),
-      gstPercent: Number(gstValue),
-      unit,
-      createdDate: product.createdDate || new Date().toISOString().slice(0, 10),
-    });
+    const rate = Number(rateValue);
+    const gstPercent = Number(gstValue);
+
+    if (!Number.isFinite(rate) || !Number.isFinite(gstPercent)) {
+      this.snackBar.open("Rate and GST must be valid numbers", "Close", {
+        duration: 4000,
+      });
+      return;
+    }
+
+    this.savingProduct = true;
+
+    try {
+      await this.productService.saveProduct({
+        ...product,
+        id: product.id || `${Date.now()}`,
+        name,
+        hsnSac,
+        description,
+        rate,
+        gstPercent,
+        unit,
+        createdDate:
+          product.createdDate || new Date().toISOString().slice(0, 10),
+      });
+
+      this.snackBar.open("Product saved", "Close", { duration: 2500 });
+    } catch (error) {
+      console.error(error);
+      this.snackBar.open("Failed to save product", "Close", {
+        duration: 4000,
+      });
+    } finally {
+      this.savingProduct = false;
+    }
   }
 
   async deleteProduct(productId: string): Promise<void> {

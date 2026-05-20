@@ -10,13 +10,16 @@ import { MockDataService } from "./mock-data.service";
 })
 export class InvoiceService {
   private readonly invoicesSubject = new BehaviorSubject<Invoice[]>([]);
+  private readonly readySubject = new BehaviorSubject<boolean>(false);
+  private initializationPromise: Promise<void>;
   public readonly invoices$ = this.invoicesSubject.asObservable();
+  public readonly isReady$ = this.readySubject.asObservable();
 
   constructor(
     private readonly mockDataService: MockDataService,
     private readonly invoiceDbService: InvoiceDbService,
   ) {
-    void this.refreshInvoices();
+    this.initializationPromise = this.initialize();
   }
 
   getInvoices(): Observable<Invoice[]> {
@@ -24,43 +27,46 @@ export class InvoiceService {
   }
 
   async addInvoice(invoice: Invoice): Promise<void> {
+    await this.ensureReady();
     const saved = await this.invoiceDbService.saveInvoice(invoice);
-    this.invoicesSubject.next([
-      saved as Invoice,
-      ...this.invoicesSubject.value,
-    ]);
+    await this.refreshInvoices();
   }
 
   async saveInvoice(invoice: Invoice): Promise<Invoice> {
+    await this.ensureReady();
     const saved = await this.invoiceDbService.saveInvoice(invoice);
     await this.refreshInvoices();
     return saved as Invoice;
   }
 
   async deleteInvoice(invoiceId: string): Promise<void> {
+    await this.ensureReady();
     await this.invoiceDbService.deleteInvoice(invoiceId);
     await this.refreshInvoices();
   }
 
   async getInvoiceById(invoiceId: string): Promise<Invoice | null> {
+    await this.ensureReady();
     return (await this.invoiceDbService.getInvoiceById(
       invoiceId,
     )) as Invoice | null;
   }
 
   async getNextInvoiceNumber(invoiceDate?: string | Date): Promise<string> {
+    await this.ensureReady();
     return this.invoiceDbService.getNextInvoiceNumber(invoiceDate);
   }
 
   async refreshInvoices(): Promise<void> {
+    await this.ensureReady();
+
     const invoices =
       (await this.invoiceDbService.getInvoices()) as unknown as Invoice[];
     if (invoices.length > 0) {
       this.invoicesSubject.next(invoices);
-      return;
+    } else {
+      this.invoicesSubject.next(this.getMockInvoices());
     }
-
-    this.invoicesSubject.next(this.getMockInvoices());
   }
 
   getMockInvoices(): Invoice[] {
@@ -119,5 +125,34 @@ export class InvoiceService {
 
   getRecentInvoices(limit: number = 5): Invoice[] {
     return this.getMockInvoices().slice(0, limit);
+  }
+
+  private async initialize(): Promise<void> {
+    try {
+      await this.loadInvoicesFromDb();
+      this.readySubject.next(true);
+    } catch (error) {
+      console.error("Failed to initialize invoice service", error);
+      this.readySubject.next(false);
+      throw error;
+    }
+  }
+
+  private async ensureReady(): Promise<void> {
+    await this.initializationPromise;
+    if (!this.readySubject.value) {
+      throw new Error("Invoice service is not ready.");
+    }
+  }
+
+  private async loadInvoicesFromDb(): Promise<void> {
+    const invoices =
+      (await this.invoiceDbService.getInvoices()) as unknown as Invoice[];
+    if (invoices.length > 0) {
+      this.invoicesSubject.next(invoices);
+      return;
+    }
+
+    this.invoicesSubject.next(this.getMockInvoices());
   }
 }

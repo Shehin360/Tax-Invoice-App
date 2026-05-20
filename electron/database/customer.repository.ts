@@ -30,9 +30,14 @@ export class CustomerRepository {
 
     if (searchTerm.trim()) {
       clauses.push(
-        "(customer_name LIKE ? OR gstin LIKE ? OR address LIKE ? OR phone LIKE ?)",
+        "(customer_name LIKE ? ESCAPE '\\' OR gstin LIKE ? ESCAPE '\\' OR address LIKE ? ESCAPE '\\' OR phone LIKE ? ESCAPE '\\')",
       );
-      const term = `%${searchTerm.trim()}%`;
+      const escapedTerm = searchTerm
+        .trim()
+        .replace(/\\/g, "\\\\")
+        .replace(/%/g, "\\%")
+        .replace(/_/g, "\\_");
+      const term = `%${escapedTerm}%`;
       params.push(term, term, term, term);
     }
 

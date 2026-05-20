@@ -10,6 +10,10 @@ import { Invoice } from "../models/invoice.model";
 
 const FALLBACK_KEY = "tax-invoice-manager.invoices";
 
+type PersistedInvoice = Invoice & {
+  createdAt: string;
+};
+
 @Injectable({
   providedIn: "root",
 })
@@ -23,12 +27,13 @@ export class InvoiceDbService {
 
     const date = invoiceDate instanceof Date ? invoiceDate : new Date();
     const year = date.getFullYear();
-    const invoices = readJson<Invoice[]>(FALLBACK_KEY, []);
-    const sequence = invoices.reduce((max, invoice) => {
-      const parts = invoice.invoiceNumber.split("-");
-      const value = Number(parts[2]);
-      return Number.isFinite(value) && value > max ? value : max;
-    }, 0);
+    const invoices = readJson<PersistedInvoice[]>(FALLBACK_KEY, []);
+    const sequence = invoices
+      .map((invoice) => invoice.invoiceNumber.split("-"))
+      .filter((parts) => parts.length >= 3 && parts[1] === String(year))
+      .map((parts) => Number(parts[2]))
+      .filter((value) => Number.isFinite(value))
+      .reduce((max, value) => (value > max ? value : max), 0);
 
     return `INV-${year}-${String(sequence + 1).padStart(3, "0")}`;
   }
@@ -42,7 +47,9 @@ export class InvoiceDbService {
       >;
     }
 
-    const invoices = readJson<Invoice[]>(FALLBACK_KEY, []);
+    const invoices = this.hydrateFallbackInvoices(
+      readJson<PersistedInvoice[]>(FALLBACK_KEY, []),
+    );
     const searchTerm = options.searchTerm?.trim().toLowerCase();
     const filtered = invoices.filter((invoice) => {
       const matchesSearch = !searchTerm
@@ -51,24 +58,19 @@ export class InvoiceDbService {
             .join(" ")
             .toLowerCase()
             .includes(searchTerm);
-      const invoiceDate = new Date(invoice.invoiceDate)
-        .toISOString()
-        .slice(0, 10);
+      const invoiceDate = this.toDateString(invoice.invoiceDate);
       const matchesFrom = !options.fromDate || invoiceDate >= options.fromDate;
       const matchesTo = !options.toDate || invoiceDate <= options.toDate;
       return matchesSearch && matchesFrom && matchesTo;
     });
 
-    return filtered.map((invoice, index) => ({
-      id: String(index + 1),
+    return filtered.map((invoice) => ({
+      id: invoice.id ?? this.createFallbackInvoiceId(),
       invoiceNumber: invoice.invoiceNumber,
-      invoiceDate:
-        invoice.invoiceDate instanceof Date
-          ? invoice.invoiceDate.toISOString().slice(0, 10)
-          : String(invoice.invoiceDate).slice(0, 10),
+      invoiceDate: this.toDateString(invoice.invoiceDate),
       buyerName: invoice.buyerName,
       grandTotal: invoice.grandTotal,
-      createdAt: new Date().toISOString(),
+      createdAt: invoice.createdAt,
     }));
   }
 
@@ -78,13 +80,15 @@ export class InvoiceDbService {
       return row ? this.toAngularInvoice(row) : null;
     }
 
-    const invoices = readJson<Invoice[]>(FALLBACK_KEY, []);
-    const invoice = invoices[Number(id) - 1];
+    const invoices = this.hydrateFallbackInvoices(
+      readJson<PersistedInvoice[]>(FALLBACK_KEY, []),
+    );
+    const invoice = invoices.find((candidate) => candidate.id === id);
     return invoice
       ? this.toAngularInvoice({
           id,
           ...this.toPayload(invoice),
-          created_at: new Date().toISOString(),
+          created_at: invoice.createdAt,
           items: invoice.items.map((item) => ({
             id: item.id,
             invoiceId: id,
@@ -108,19 +112,49 @@ export class InvoiceDbService {
       return this.toAngularInvoice(saved);
     }
 
-    const invoices = readJson<Invoice[]>(FALLBACK_KEY, []);
-    const existingIndex = invoices.findIndex(
-      (candidate) => candidate.invoiceNumber === invoice.invoiceNumber,
+    const invoices = this.hydrateFallbackInvoices(
+      readJson<PersistedInvoice[]>(FALLBACK_KEY, []),
     );
+    const persistedInvoice: PersistedInvoice = {
+      ...invoice,
+      id: invoice.id || this.createFallbackInvoiceId(),
+      createdAt:
+        invoices.find((candidate) => candidate.id === invoice.id)?.createdAt ||
+        new Date().toISOString(),
+    };
+
+    const existingIndex = invoices.findIndex((candidate) => {
+      if (invoice.id) {
+        return candidate.id === invoice.id;
+      }
+
+      return candidate.invoiceNumber === invoice.invoiceNumber;
+    });
 
     if (existingIndex >= 0) {
-      invoices[existingIndex] = invoice;
+      invoices[existingIndex] = persistedInvoice;
     } else {
-      invoices.unshift(invoice);
+      invoices.unshift(persistedInvoice);
     }
 
     writeJson(FALLBACK_KEY, invoices);
-    return invoice;
+    return this.toAngularInvoice({
+      ...payload,
+      id: persistedInvoice.id,
+      created_at: persistedInvoice.createdAt,
+      createdAt: persistedInvoice.createdAt,
+      items: payload.items.map((item, index) => ({
+        id: String(index + 1),
+        invoiceId: persistedInvoice.id,
+        productName: item.productName,
+        hsn: item.hsn,
+        quantity: item.quantity,
+        unit: item.unit,
+        rate: item.rate,
+        gst: item.gst,
+        amount: item.amount,
+      })),
+    });
   }
 
   async deleteInvoice(id: string): Promise<void> {
@@ -129,10 +163,12 @@ export class InvoiceDbService {
       return;
     }
 
-    const invoices = readJson<Invoice[]>(FALLBACK_KEY, []);
+    const invoices = this.hydrateFallbackInvoices(
+      readJson<PersistedInvoice[]>(FALLBACK_KEY, []),
+    );
     writeJson(
       FALLBACK_KEY,
-      invoices.filter((_, index) => String(index + 1) !== id),
+      invoices.filter((invoice) => invoice.id !== id),
     );
   }
 
@@ -210,5 +246,40 @@ export class InvoiceDbService {
       amountInWords: row.amountInWords ?? row.amount_in_words,
       declaration: row.declaration ?? "",
     };
+  }
+
+  private createFallbackInvoiceId(): string {
+    return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}`;
+  }
+
+  private hydrateFallbackInvoices(
+    invoices: PersistedInvoice[],
+  ): PersistedInvoice[] {
+    let changed = false;
+
+    const hydrated = invoices.map((invoice) => {
+      if (invoice.id) {
+        return invoice;
+      }
+
+      changed = true;
+      return {
+        ...invoice,
+        id: this.createFallbackInvoiceId(),
+        createdAt: invoice.createdAt || this.toDateString(invoice.invoiceDate),
+      };
+    });
+
+    if (changed) {
+      writeJson(FALLBACK_KEY, hydrated);
+    }
+
+    return hydrated;
+  }
+
+  private toDateString(value: string | Date): string {
+    return value instanceof Date
+      ? value.toISOString().slice(0, 10)
+      : String(value).slice(0, 10);
   }
 }

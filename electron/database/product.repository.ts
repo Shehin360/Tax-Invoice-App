@@ -27,8 +27,15 @@ export class ProductRepository {
     const params: Array<string | number | null> = [];
 
     if (searchTerm.trim()) {
-      clauses.push("(product_name LIKE ? OR hsn LIKE ? OR description LIKE ?)");
-      const term = `%${searchTerm.trim()}%`;
+      clauses.push(
+        "(product_name LIKE ? ESCAPE '\\' OR hsn LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\')",
+      );
+      const escapedTerm = searchTerm
+        .trim()
+        .replace(/\\/g, "\\\\")
+        .replace(/%/g, "\\%")
+        .replace(/_/g, "\\_");
+      const term = `%${escapedTerm}%`;
       params.push(term, term, term);
     }
 

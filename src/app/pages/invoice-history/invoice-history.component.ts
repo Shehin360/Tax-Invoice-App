@@ -405,9 +405,16 @@ export class InvoiceHistoryComponent implements OnInit {
       return;
     }
 
-    await this.invoiceDbService.deleteInvoice(id);
-    this.snackBar.open("Invoice deleted", "Close", { duration: 2500 });
-    await this.loadInvoices();
+    try {
+      await this.invoiceDbService.deleteInvoice(id);
+      this.snackBar.open("Invoice deleted", "Close", { duration: 2500 });
+      await this.loadInvoices();
+    } catch (error) {
+      console.error(error);
+      this.snackBar.open("Failed to delete invoice", "Close", {
+        duration: 4000,
+      });
+    }
   }
 
   private toDateString(date: Date): string {

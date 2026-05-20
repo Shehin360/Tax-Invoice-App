@@ -84,9 +84,24 @@ export interface InvoiceListOptions {
   searchTerm?: string;
   fromDate?: string;
   toDate?: string;
-  sortBy?: "invoice_date" | "invoice_number" | "grand_total" | "buyer_name";
+  sortBy?:
+    | "invoice_date"
+    | "invoice_number"
+    | "grand_total"
+    | "buyer_name"
+    | "created_at";
   sortDirection?: "ASC" | "DESC";
 }
+
+const ALLOWED_SORT_COLUMNS = new Set([
+  "invoice_date",
+  "invoice_number",
+  "buyer_name",
+  "grand_total",
+  "created_at",
+]);
+
+const ALLOWED_SORT_DIRECTIONS = new Set(["ASC", "DESC"]);
 
 export class InvoiceRepository {
   async getInvoices(
@@ -95,11 +110,16 @@ export class InvoiceRepository {
     const clauses: string[] = [];
     const params: Array<string | number | null> = [];
 
-    if (options.searchTerm) {
+    if (options.searchTerm?.trim()) {
       clauses.push(
-        "(invoice_number LIKE ? OR buyer_name LIKE ? OR buyer_gstin LIKE ?)",
+        "(invoice_number LIKE ? ESCAPE '\\' OR buyer_name LIKE ? ESCAPE '\\' OR buyer_gstin LIKE ? ESCAPE '\\')",
       );
-      const term = `%${options.searchTerm}%`;
+      const escapedTerm = options.searchTerm
+        .trim()
+        .replace(/\\/g, "\\\\")
+        .replace(/%/g, "\\%")
+        .replace(/_/g, "\\_");
+      const term = `%${escapedTerm}%`;
       params.push(term, term, term);
     }
 
@@ -113,8 +133,16 @@ export class InvoiceRepository {
       params.push(options.toDate);
     }
 
-    const sortBy = options.sortBy ?? "invoice_date";
-    const sortDirection = options.sortDirection ?? "DESC";
+    const sortBy = ALLOWED_SORT_COLUMNS.has(options.sortBy ?? "")
+      ? (options.sortBy as NonNullable<InvoiceListOptions["sortBy"]>)
+      : "invoice_date";
+    const sortDirection = ALLOWED_SORT_DIRECTIONS.has(
+      options.sortDirection ?? "",
+    )
+      ? (options.sortDirection as NonNullable<
+          InvoiceListOptions["sortDirection"]
+        >)
+      : "DESC";
     const whereClause =
       clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
     const rows = await database.all<{
@@ -225,13 +253,15 @@ export class InvoiceRepository {
 
   async saveInvoice(payload: SaveInvoicePayload): Promise<InvoiceDetails> {
     let invoiceId = payload.id ? Number(payload.id) : undefined;
-    const invoiceNumber =
-      payload.invoiceNumber?.trim() ||
-      (await this.generateInvoiceNumber(payload.invoiceDate));
-
     const normalizedDate = payload.invoiceDate.slice(0, 10);
 
     return database.transaction(async () => {
+      const invoiceNumber =
+        payload.invoiceNumber?.trim() ||
+        (await this.generateInvoiceNumberForYear(
+          new Date(payload.invoiceDate).getFullYear(),
+        ));
+
       if (invoiceId) {
         await database.run(
           `UPDATE invoices
@@ -330,18 +360,24 @@ export class InvoiceRepository {
 
   async generateInvoiceNumber(invoiceDate?: string): Promise<string> {
     const referenceDate = invoiceDate ? new Date(invoiceDate) : new Date();
-    const year = referenceDate.getFullYear();
+    return database.transaction(async () => {
+      return this.generateInvoiceNumberForYear(referenceDate.getFullYear());
+    });
+  }
+
+  private async generateInvoiceNumberForYear(year: number): Promise<string> {
     const rows = await database.all<{ invoice_number: string }>(
       "SELECT invoice_number FROM invoices WHERE invoice_number LIKE ?",
       [`INV-${year}-%`],
     );
 
     const nextSequence =
-      rows.reduce((max, row) => {
-        const parts = row.invoice_number.split("-");
-        const sequence = Number(parts[2]);
-        return Number.isFinite(sequence) && sequence > max ? sequence : max;
-      }, 0) + 1;
+      rows
+        .map((row) => row.invoice_number.split("-"))
+        .filter((parts) => parts.length >= 3 && parts[1] === String(year))
+        .map((parts) => Number(parts[2]))
+        .filter((sequence) => Number.isFinite(sequence))
+        .reduce((max, sequence) => (sequence > max ? sequence : max), 0) + 1;
 
     return `INV-${year}-${String(nextSequence).padStart(3, "0")}`;
   }

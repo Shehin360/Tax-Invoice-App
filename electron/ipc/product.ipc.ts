@@ -1,5 +1,8 @@
 import { ipcMain } from "electron";
-import { productRepository } from "../database/product.repository";
+import {
+  productRepository,
+  type ProductPayload,
+} from "../database/product.repository";
 
 export function registerProductIpc(): void {
   ipcMain.handle("product:get-all", async (_event, searchTerm?: string) => {
@@ -10,7 +13,7 @@ export function registerProductIpc(): void {
     return productRepository.getProductById(id);
   });
 
-  ipcMain.handle("product:save", async (_event, payload) => {
+  ipcMain.handle("product:save", async (_event, payload: ProductPayload) => {
     return productRepository.saveProduct(payload);
   });
 
