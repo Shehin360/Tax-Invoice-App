@@ -127,6 +127,11 @@ export interface ElectronSettingsDto {
   accountHolderName: string;
 }
 
+export interface ElectronSaveLogoPayload {
+  fileName: string;
+  dataUrl: string;
+}
+
 export interface ElectronInvoiceQueryOptions {
   searchTerm?: string;
   fromDate?: string;

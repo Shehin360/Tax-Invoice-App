@@ -16,6 +16,7 @@ import { MatSelectModule } from "@angular/material/select";
 import { MatSnackBar, MatSnackBarModule } from "@angular/material/snack-bar";
 import { MatTableModule } from "@angular/material/table";
 import { MatTooltipModule } from "@angular/material/tooltip";
+import { PdfService } from "../../services/pdf.service";
 
 import {
   ElectronInvoiceHistoryItem,
@@ -176,6 +177,24 @@ import { InvoiceDbService } from "../../services/invoice-db.service";
                     matTooltip="Open"
                     (click)="openInvoice(row.id)">
                     <mat-icon>open_in_new</mat-icon>
+                  </button>
+                  <button
+                    mat-icon-button
+                    matTooltip="Preview PDF"
+                    (click)="previewPdf(row.id)">
+                    <mat-icon>preview</mat-icon>
+                  </button>
+                  <button
+                    mat-icon-button
+                    matTooltip="Generate PDF"
+                    (click)="generatePdf(row.id)">
+                    <mat-icon>picture_as_pdf</mat-icon>
+                  </button>
+                  <button
+                    mat-icon-button
+                    matTooltip="Print PDF"
+                    (click)="printPdf(row.id)">
+                    <mat-icon>print</mat-icon>
                   </button>
                   <button
                     mat-icon-button
@@ -349,6 +368,7 @@ export class InvoiceHistoryComponent implements OnInit {
     private readonly fb: FormBuilder,
     private readonly invoiceDbService: InvoiceDbService,
     private readonly router: Router,
+    private readonly pdfService: PdfService,
     private readonly snackBar: MatSnackBar,
   ) {}
 
@@ -398,6 +418,35 @@ export class InvoiceHistoryComponent implements OnInit {
 
   async openInvoice(id: string): Promise<void> {
     await this.router.navigate(["/invoice"], { queryParams: { id } });
+  }
+
+  async previewPdf(id: string): Promise<void> {
+    await this.router.navigate(["/preview", id]);
+  }
+
+  async generatePdf(id: string): Promise<void> {
+    try {
+      const pdfPath = await this.pdfService.savePDF(id);
+      this.snackBar.open(`PDF saved: ${pdfPath.split("/").pop()}`, "Close", {
+        duration: 3000,
+      });
+    } catch (error) {
+      console.error(error);
+      this.snackBar.open("Failed to generate PDF", "Close", {
+        duration: 4000,
+      });
+    }
+  }
+
+  async printPdf(id: string): Promise<void> {
+    try {
+      await this.pdfService.printPDF(id);
+    } catch (error) {
+      console.error(error);
+      this.snackBar.open("Failed to print PDF", "Close", {
+        duration: 4000,
+      });
+    }
   }
 
   async deleteInvoice(id: string): Promise<void> {

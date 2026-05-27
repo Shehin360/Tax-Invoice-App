@@ -21,7 +21,7 @@ import { MatSnackBar, MatSnackBarModule } from "@angular/material/snack-bar";
 import { MatSelectModule } from "@angular/material/select";
 import { MatTableModule } from "@angular/material/table";
 import { MatTooltipModule } from "@angular/material/tooltip";
-import { ActivatedRoute } from "@angular/router";
+import { ActivatedRoute, Router } from "@angular/router";
 
 import { InvoicePreviewComponent } from "../../components/invoice-preview/invoice-preview.component";
 import {
@@ -36,6 +36,7 @@ import { InvoiceService } from "../../services/invoice.service";
 import { MockDataService } from "../../services/mock-data.service";
 import { CustomerService } from "../../services/customer.service";
 import { ProductService } from "../../services/product.service";
+import { PdfService } from "../../services/pdf.service";
 
 type InvoiceItemControls = {
   productId: FormControl<string>;
@@ -430,6 +431,31 @@ type InvoiceFormControls = {
               <mat-icon>save</mat-icon>
               Save Invoice
             </button>
+            <button
+              mat-stroked-button
+              color="primary"
+              type="button"
+              (click)="previewInvoicePdf()"
+              [disabled]="pdfBusy">
+              <mat-icon>preview</mat-icon>
+              Preview PDF
+            </button>
+            <button
+              mat-stroked-button
+              type="button"
+              (click)="generateInvoicePdf()"
+              [disabled]="pdfBusy">
+              <mat-icon>picture_as_pdf</mat-icon>
+              Generate PDF
+            </button>
+            <button
+              mat-stroked-button
+              type="button"
+              (click)="printInvoicePdf()"
+              [disabled]="pdfBusy">
+              <mat-icon>print</mat-icon>
+              Print
+            </button>
             <button mat-stroked-button type="button" (click)="resetForm()">
               <mat-icon>restart_alt</mat-icon>
               Reset Draft
@@ -740,6 +766,7 @@ export class InvoiceFormComponent implements OnInit {
 
   invoiceForm!: FormGroup<InvoiceFormControls>;
   previewInvoice: Invoice | null = null;
+  pdfBusy = false;
   taxSummary: InvoiceTaxSummary = {
     subtotal: 0,
     cgst: 0,
@@ -774,6 +801,8 @@ export class InvoiceFormComponent implements OnInit {
     private readonly productService: ProductService,
     private readonly snackBar: MatSnackBar,
     private readonly route: ActivatedRoute,
+    private readonly router: Router,
+    private readonly pdfService: PdfService,
   ) {}
 
   ngOnInit(): void {
@@ -921,28 +950,89 @@ export class InvoiceFormComponent implements OnInit {
   }
 
   async saveInvoice(): Promise<void> {
+    const savedInvoice = await this.persistInvoice();
+    if (!savedInvoice) {
+      return;
+    }
+
+    await this.initializeInvoiceNumber();
+  }
+
+  async previewInvoicePdf(): Promise<void> {
+    const savedInvoice = await this.persistInvoice();
+    if (!savedInvoice?.id) {
+      return;
+    }
+
+    await this.router.navigate(["/preview", savedInvoice.id]);
+  }
+
+  async generateInvoicePdf(): Promise<void> {
+    const savedInvoice = await this.persistInvoice();
+    if (!savedInvoice?.id) {
+      return;
+    }
+
+    this.pdfBusy = true;
+    try {
+      const pdfPath = await this.pdfService.savePDF(savedInvoice.id);
+      this.snackBar.open(`PDF saved: ${pdfPath.split("/").pop()}`, "Close", {
+        duration: 3500,
+      });
+    } catch (error) {
+      console.error(error);
+      this.snackBar.open("Failed to generate PDF", "Close", {
+        duration: 4000,
+      });
+    } finally {
+      this.pdfBusy = false;
+    }
+  }
+
+  async printInvoicePdf(): Promise<void> {
+    const savedInvoice = await this.persistInvoice();
+    if (!savedInvoice?.id) {
+      return;
+    }
+
+    this.pdfBusy = true;
+    try {
+      await this.pdfService.printPDF(savedInvoice.id);
+    } catch (error) {
+      console.error(error);
+      this.snackBar.open("Failed to print invoice", "Close", {
+        duration: 4000,
+      });
+    } finally {
+      this.pdfBusy = false;
+    }
+  }
+
+  private async persistInvoice(): Promise<Invoice | null> {
     if (this.invoiceForm.invalid || this.itemsArray.length === 0) {
       this.invoiceForm.markAllAsTouched();
       this.itemsArray.controls.forEach((group) => group.markAllAsTouched());
       this.statusMessage =
         "Please fix the highlighted validation errors before saving.";
-      return;
+      return null;
     }
 
     const invoice = this.buildInvoicePayload();
     try {
-      await this.invoiceService.saveInvoice(invoice);
+      const savedInvoice = await this.invoiceService.saveInvoice(invoice);
+      this.selectedInvoiceId = savedInvoice.id ?? this.selectedInvoiceId;
       this.statusMessage = `Invoice ${invoice.invoiceNumber} saved successfully.`;
       this.snackBar.open(`Invoice ${invoice.invoiceNumber} saved`, "Close", {
         duration: 3000,
       });
-      await this.initializeInvoiceNumber();
+      return savedInvoice;
     } catch (error) {
       console.error(error);
       this.statusMessage = "Unable to save the invoice. Please try again.";
       this.snackBar.open("Failed to save invoice", "Close", {
         duration: 4000,
       });
+      return null;
     }
   }
 

@@ -10,8 +10,10 @@ import isDev from "electron-is-dev";
 import { database } from "./database/database";
 import { registerCustomerIpc } from "./ipc/customer.ipc";
 import { registerInvoiceIpc } from "./ipc/invoice.ipc";
+import { registerPdfIpc } from "./ipc/pdf.ipc";
 import { registerProductIpc } from "./ipc/product.ipc";
 import { registerSettingsIpc } from "./ipc/settings.ipc";
+import { ipcMain } from "electron";
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -75,6 +77,9 @@ async function bootstrap(): Promise<void> {
   registerCustomerIpc();
   registerProductIpc();
   registerSettingsIpc();
+  registerPdfIpc();
+  ipcMain.handle("get-app-version", () => app.getVersion());
+  ipcMain.handle("get-app-name", () => "Tax Invoice Manager");
   buildApplicationMenu();
   await createWindow();
 }

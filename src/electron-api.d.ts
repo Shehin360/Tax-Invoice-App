@@ -7,6 +7,7 @@ import type {
   ElectronProductPayload,
   ElectronSaveInvoicePayload,
   ElectronProductDto,
+  ElectronSaveLogoPayload,
   ElectronSettingsDto,
   ElectronSettingsPayload,
 } from "./app/shared/electron-contracts";
@@ -41,6 +42,13 @@ declare global {
         payload: ElectronSettingsPayload,
       ) => Promise<ElectronSettingsDto>;
       getSettings: () => Promise<ElectronSettingsDto>;
+      saveLogo: (payload: ElectronSaveLogoPayload) => Promise<string>;
+
+      generateInvoicePDF: (invoiceId: string) => Promise<string>;
+      openInvoicePDF: (invoiceId: string) => Promise<string>;
+      deleteInvoicePDF: (invoiceId: string) => Promise<boolean>;
+      printInvoicePDF: (invoiceId: string) => Promise<boolean>;
+      getInvoicePDFPath: (invoiceId: string) => Promise<string | null>;
     };
   }
 }

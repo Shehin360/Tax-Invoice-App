@@ -14,6 +14,7 @@ import { MatButtonModule } from "@angular/material/button";
 import { MatIconModule } from "@angular/material/icon";
 import { MatDividerModule } from "@angular/material/divider";
 import { MatTabsModule } from "@angular/material/tabs";
+import { MatSnackBar, MatSnackBarModule } from "@angular/material/snack-bar";
 import { SettingsService } from "../../services/settings.service";
 import { CompanySettings } from "../../models/settings.model";
 
@@ -31,6 +32,7 @@ import { CompanySettings } from "../../models/settings.model";
     MatIconModule,
     MatDividerModule,
     MatTabsModule,
+    MatSnackBarModule,
   ],
   template: `
     <div class="settings-container">
@@ -96,13 +98,30 @@ import { CompanySettings } from "../../models/settings.model";
                   <!-- Logo Upload -->
                   <div class="full-width logo-section">
                     <h3>Logo</h3>
+                    <input
+                      #logoInput
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      (change)="onLogoSelected($event)" />
                     <div class="logo-container">
                       <div class="logo-preview">
-                        <mat-icon>image</mat-icon>
-                        <p>Logo Preview</p>
+                        <img
+                          *ngIf="logoPreviewSrc; else logoPlaceholder"
+                          [src]="logoPreviewSrc"
+                          alt="Logo preview" />
+                        <ng-template #logoPlaceholder>
+                          <mat-icon>image</mat-icon>
+                          <p>Logo Preview</p>
+                        </ng-template>
                       </div>
-                      <button mat-raised-button type="button">
-                        <mat-icon>upload</mat-icon> Upload Logo
+                      <button
+                        mat-raised-button
+                        type="button"
+                        (click)="logoInput.click()"
+                        [disabled]="uploadingLogo">
+                        <mat-icon>upload</mat-icon>
+                        {{ uploadingLogo ? "Uploading..." : "Upload Logo" }}
                       </button>
                     </div>
                   </div>
@@ -327,6 +346,7 @@ import { CompanySettings } from "../../models/settings.model";
         align-items: center;
         justify-content: center;
         color: #999;
+        overflow: hidden;
       }
 
       .logo-preview mat-icon {
@@ -338,6 +358,12 @@ import { CompanySettings } from "../../models/settings.model";
       .logo-preview p {
         font-size: 12px;
         margin: 8px 0 0 0;
+      }
+
+      .logo-preview img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
       }
 
       .bank-info-box {
@@ -454,10 +480,13 @@ export class SettingsComponent implements OnInit {
   companyForm!: FormGroup;
   bankForm!: FormGroup;
   currentSettings!: CompanySettings;
+  logoPreviewSrc = "";
+  uploadingLogo = false;
 
   constructor(
     private fb: FormBuilder,
     private settingsService: SettingsService,
+    private snackBar: MatSnackBar,
   ) {}
 
   ngOnInit(): void {
@@ -481,7 +510,9 @@ export class SettingsComponent implements OnInit {
         this.currentSettings.email,
         [Validators.required, Validators.email],
       ],
+      logoUrl: [this.currentSettings.logoUrl ?? ""],
     });
+    this.logoPreviewSrc = this.currentSettings.logoUrl ?? "";
   }
 
   initializeBankForm(): void {
@@ -515,6 +546,58 @@ export class SettingsComponent implements OnInit {
 
   resetCompanyForm(): void {
     this.initializeCompanyForm();
+  }
+
+  async onLogoSelected(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    this.uploadingLogo = true;
+
+    try {
+      const dataUrl = await this.readFileAsDataUrl(file);
+      if (!window.api) {
+        this.logoPreviewSrc = dataUrl;
+        this.companyForm.patchValue({ logoUrl: dataUrl });
+        return;
+      }
+
+      const logoPath = await window.api.saveLogo({
+        fileName: file.name,
+        dataUrl,
+      });
+
+      this.logoPreviewSrc = logoPath;
+      this.companyForm.patchValue({ logoUrl: logoPath });
+      this.currentSettings = {
+        ...this.currentSettings,
+        logoUrl: logoPath,
+      };
+      this.snackBar.open("Logo saved successfully", "Close", {
+        duration: 3000,
+      });
+    } catch (error) {
+      console.error(error);
+      this.snackBar.open("Failed to upload logo", "Close", {
+        duration: 4000,
+      });
+    } finally {
+      this.uploadingLogo = false;
+      input.value = "";
+    }
+  }
+
+  private readFileAsDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ""));
+      reader.onerror = () => reject(new Error("Unable to read logo file"));
+      reader.readAsDataURL(file);
+    });
   }
 
   resetBankForm(): void {

@@ -6,6 +6,11 @@ import type { ProductPayload } from "./database/product.repository";
 import type { SettingsPayload } from "./database/settings.repository";
 import type { InvoiceListOptions } from "./database/invoice.repository";
 
+interface ElectronSaveLogoPayload {
+  fileName: string;
+  dataUrl: string;
+}
+
 const electronApi = {
   getAppVersion: (): Promise<string> => ipcRenderer.invoke("get-app-version"),
   getAppName: (): Promise<string> => ipcRenderer.invoke("get-app-name"),
@@ -36,6 +41,20 @@ const electronApi = {
   saveSettings: (payload: SettingsPayload) =>
     ipcRenderer.invoke("settings:save", payload),
   getSettings: () => ipcRenderer.invoke("settings:get"),
+
+  saveLogo: (payload: ElectronSaveLogoPayload) =>
+    ipcRenderer.invoke("settings:save-logo", payload),
+
+  generateInvoicePDF: (invoiceId: string) =>
+    ipcRenderer.invoke("pdf:generate", invoiceId),
+  openInvoicePDF: (invoiceId: string) =>
+    ipcRenderer.invoke("pdf:open", invoiceId),
+  deleteInvoicePDF: (invoiceId: string) =>
+    ipcRenderer.invoke("pdf:delete", invoiceId),
+  printInvoicePDF: (invoiceId: string) =>
+    ipcRenderer.invoke("pdf:print", invoiceId),
+  getInvoicePDFPath: (invoiceId: string) =>
+    ipcRenderer.invoke("pdf:path", invoiceId),
 };
 
 contextBridge.exposeInMainWorld("api", electronApi);

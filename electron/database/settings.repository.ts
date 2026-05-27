@@ -1,4 +1,5 @@
 import { database, DEFAULT_SETTINGS, SettingsRecord } from "./database";
+import { fileURLToPath, pathToFileURL } from "url";
 
 export interface SettingsPayload {
   id?: string;
@@ -76,7 +77,7 @@ export class SettingsRepository {
       address: row.address,
       phone: row.phone,
       bankDetails: row.bank_details ?? "",
-      logoPath: row.logo_path ?? "",
+      logoPath: this.toPublicLogoUrl(row.logo_path ?? ""),
       city: row.city ?? "",
       state: row.state ?? "",
       postalCode: row.postal_code ?? "",
@@ -89,6 +90,8 @@ export class SettingsRepository {
   }
 
   async saveSettings(payload: SettingsPayload): Promise<SettingsDto> {
+    const logoPath = this.toStoragePath(payload.logoPath ?? "");
+
     await database.run(
       `INSERT INTO settings (
         id, company_name, gstin, address, phone, bank_details, logo_path,
@@ -115,7 +118,7 @@ export class SettingsRepository {
         payload.address,
         payload.phone,
         payload.bankDetails ?? "",
-        payload.logoPath ?? "",
+        logoPath,
         payload.city ?? "",
         payload.state ?? "",
         payload.postalCode ?? "",
@@ -128,6 +131,30 @@ export class SettingsRepository {
     );
 
     return this.getSettings();
+  }
+
+  private toStoragePath(value: string): string {
+    if (!value) {
+      return "";
+    }
+
+    if (value.startsWith("file://")) {
+      return fileURLToPath(value);
+    }
+
+    return value;
+  }
+
+  private toPublicLogoUrl(value: string): string {
+    if (!value) {
+      return "";
+    }
+
+    if (value.startsWith("file://")) {
+      return value;
+    }
+
+    return pathToFileURL(value).href;
   }
 }
 
